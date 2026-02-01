@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { MapPin, Clock, Phone } from 'lucide-react';
+import { MapPin, Clock, Phone, Calendar, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabaseClient';
 import clsx from 'clsx';
 
 const Dashboard = () => {
@@ -9,7 +10,24 @@ const Dashboard = () => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [tempStatus, setTempStatus] = useState(currentUser.status);
     const [tempLocation, setTempLocation] = useState(currentUser.location);
+    const [nextEvent, setNextEvent] = useState(null);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchNextEvent = async () => {
+            const { data } = await supabase
+                .from('events')
+                .select('*')
+                .gte('event_date', new Date().toISOString())
+                .order('event_date', { ascending: true })
+                .limit(1)
+                .single();
+
+            if (data) setNextEvent(data);
+        };
+
+        fetchNextEvent();
+    }, []);
 
     const handleUpdate = () => {
         updateStatus({ status: tempStatus, location: tempLocation });
@@ -24,6 +42,30 @@ const Dashboard = () => {
                 <h1 className="text-3xl font-bold text-slate-100">Welcome back, {currentUser.username}!</h1>
                 <p className="text-slate-400 mt-2">Here's what's happening with your crew today.</p>
             </header>
+
+            {/* Notification Banner */}
+            {nextEvent && (
+                <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 border border-purple-500/30 p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-purple-900/20 animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-purple-500/20 p-3 rounded-full text-purple-300">
+                            <Bell size={24} className="animate-pulse" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-slate-100 text-lg">Upcoming: {nextEvent.title}</h3>
+                            <p className="text-purple-200 text-sm flex items-center gap-2">
+                                <Calendar size={14} />
+                                {new Date(nextEvent.event_date).toLocaleDateString()} at {new Date(nextEvent.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => navigate('/events')}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-sm transition-colors shadow-lg"
+                    >
+                        View Details
+                    </button>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Status Update Widget */}
@@ -70,7 +112,7 @@ const Dashboard = () => {
                     ) : (
                         <div className="flex items-center gap-6 bg-slate-950/50 p-6 rounded-2xl border border-slate-800">
                             <div className="relative">
-                                <img src={currentUser.avatar} alt="Me" className="w-20 h-20 rounded-full border-4 border-slate-800 shadow-lg" />
+                                <img src={currentUser.avatar_url || currentUser.avatar} alt="Me" className="w-20 h-20 rounded-full border-4 border-slate-800 shadow-lg object-cover" />
                                 <div className={clsx("absolute bottom-0 right-0 w-6 h-6 rounded-full border-4 border-slate-950",
                                     currentUser.status === 'Available' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' :
                                         currentUser.status === 'Busy' ? 'bg-red-500' : 'bg-slate-600'
@@ -122,7 +164,7 @@ const Dashboard = () => {
                     {availableFriends.length > 0 ? availableFriends.map((friend) => (
                         <div key={friend.id} className="p-5 rounded-2xl bg-slate-950/50 border border-slate-800 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-900/10 transition-all group">
                             <div className="flex items-center gap-4 mb-4">
-                                <img src={friend.avatar} alt={friend.username} className="w-12 h-12 rounded-full border-2 border-slate-700 shadow-sm" />
+                                <img src={friend.avatar_url || friend.avatar} alt={friend.username} className="w-12 h-12 rounded-full border-2 border-slate-700 shadow-sm object-cover" />
                                 <div>
                                     <div className="font-bold text-lg text-slate-100">{friend.username}</div>
                                     <div className="text-sm text-slate-500 flex items-center gap-1">

@@ -14,53 +14,8 @@ export const AppProvider = ({ children }) => {
         // Check Config
         if (!supabase) {
             console.warn('Supabase not configured. App in Demo Mode.');
-            // Fallback Mock Data
-            setSession({ user: { id: 'mock-user-id' } });
-            setCurrentUser({
-                id: 'mock-user-id',
-                username: 'Demo User',
-                status: 'Available',
-                location: 'Demo City',
-                availableUntil: '20:00',
-                avatar: 'https://i.pravatar.cc/150?u=me',
-                notifications: true,
-                locationSharing: 'precise'
-            });
-
-            // Mock Friends
-            setFriends([
-                {
-                    id: 1,
-                    username: 'Sarah',
-                    status: 'Available',
-                    location: 'Blue Bottle Coffee',
-                    availableUntil: '17:30',
-                    avatar: 'https://i.pravatar.cc/150?u=sarah',
-                    message: 'Grabbing coffee, come join!',
-                    coordinates: [40.7128, -74.0060],
-                },
-                {
-                    id: 2,
-                    username: 'Mike',
-                    status: 'Busy',
-                    location: 'Work',
-                    availableUntil: '19:00',
-                    avatar: 'https://i.pravatar.cc/150?u=mike',
-                    message: 'In meetings all day.',
-                    coordinates: [40.7580, -73.9855],
-                },
-                {
-                    id: 3,
-                    username: 'Jessica',
-                    status: 'Available',
-                    location: 'City Library',
-                    availableUntil: '16:00',
-                    avatar: 'https://i.pravatar.cc/150?u=jessica',
-                    message: 'Studying for finals.',
-                    coordinates: [40.7532, -73.9822],
-                },
-            ]);
-
+            // If Supabase is not configured, we just stop loading.
+            // The app will effectively be broken/empty, which is better than fake data for this user.
             setLoading(false);
             return;
         }
@@ -149,8 +104,29 @@ export const AppProvider = ({ children }) => {
         } catch (e) { console.error(e); setLoading(false); }
     };
 
+    const [locationSharingEnabled, setLocationSharingEnabled] = useState(true);
+
+    const toggleLocationSharing = async (enabled) => {
+        setLocationSharingEnabled(enabled);
+        if (currentUser) {
+            // Update DB immediately
+            const updates = {
+                location_sharing: enabled,
+                coordinates: enabled ? currentUser.coordinates : null, // Clear coords if disabled
+                location: enabled ? 'Live on Map' : 'Ghost Mode'
+            };
+            await updateStatus(updates);
+        }
+    };
+
     const updateStatus = async (newStatus) => {
         if (!currentUser || !supabase) return;
+
+        // If ghost mode is on, ensure we don't accidentally send coordinates unless we are enabling it
+        if (!locationSharingEnabled && newStatus.coordinates && newStatus.location_sharing === undefined) {
+            delete newStatus.coordinates;
+            delete newStatus.location;
+        }
 
         const updatedUser = { ...currentUser, ...newStatus };
         setCurrentUser(updatedUser); // Optimistic
@@ -166,13 +142,56 @@ export const AppProvider = ({ children }) => {
         }
     };
 
+    const loginAsGuest = () => {
+        setSession({ user: { id: 'guest-user-id' } });
+        setCurrentUser({
+            id: 'guest-user-id',
+            username: 'Guest User',
+            status: 'Available',
+            location: 'Secret Base',
+            availableUntil: 'Never',
+            avatar: 'https://i.pravatar.cc/150?u=guest',
+            notifications: false,
+            locationSharing: 'approximate'
+        });
+
+        // Ensure friends are populated for the full experience
+        if (friends.length === 0) {
+            setFriends([
+                {
+                    id: 1,
+                    username: 'Sarah',
+                    status: 'Available',
+                    location: 'Blue Bottle Coffee',
+                    availableUntil: '17:30',
+                    avatar: 'https://i.pravatar.cc/150?u=sarah',
+                    message: 'Grabbing coffee, come join!',
+                    coordinates: [40.7128, -74.0060],
+                },
+                {
+                    id: 2,
+                    username: 'Mike',
+                    status: 'Busy',
+                    location: 'Work',
+                    availableUntil: '19:00',
+                    avatar: 'https://i.pravatar.cc/150?u=mike',
+                    message: 'In meetings all day.',
+                    coordinates: [40.7580, -73.9855],
+                }
+            ]);
+        }
+    };
+
     const value = {
         session,
         currentUser,
         friends,
         loading,
         updateStatus,
-        logout
+        logout,
+        locationSharingEnabled,
+        toggleLocationSharing,
+        loginAsGuest
     };
 
     return (
